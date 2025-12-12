@@ -15,8 +15,8 @@ xv6-labs-2025/
 │   ├── sh.c                  # 解析 >> 重定向运算符
 │   ├── ln.c                  # 添加 -s 选项支持软链接
 │   ├── grep.c                # 添加 -i 选项支持大小写不敏感
-│   ├── stat.c                # 【新增】stat 命令实现
-│   ├── find.c                # 【新增】find 命令实现
+│   ├── stat.c                # stat 命令实现
+│   ├── find.c                # find 命令实现
 │   ├── user.h                # 添加 symlink、lstat 函数声明
 │   └── usys.pl               # 添加系统调用入口
 │
