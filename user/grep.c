@@ -6,7 +6,24 @@
 #include "user/user.h"
 
 char buf[1024];
+int ignore_case = 0;
 int match(char*, char*);
+
+static int
+tolower_ascii(int c)
+{
+  if(c >= 'A' && c <= 'Z')
+    return c - 'A' + 'a';
+  return c;
+}
+
+static int
+charmatch(int a, int b)
+{
+  if(ignore_case)
+    return tolower_ascii(a) == tolower_ascii(b);
+  return a == b;
+}
 
 void
 grep(char *pattern, int fd)
@@ -39,19 +56,25 @@ main(int argc, char *argv[])
 {
   int fd, i;
   char *pattern;
+  int argi = 1;
 
-  if(argc <= 1){
-    fprintf(2, "usage: grep pattern [file ...]\n");
+  if(argc > 1 && strcmp(argv[1], "-i") == 0){
+    ignore_case = 1;
+    argi++;
+  }
+
+  if(argc <= argi){
+    fprintf(2, "usage: grep [-i] pattern [file ...]\n");
     exit(1);
   }
-  pattern = argv[1];
+  pattern = argv[argi];
 
-  if(argc <= 2){
+  if(argc <= argi + 1){
     grep(pattern, 0);
     exit(0);
   }
 
-  for(i = 2; i < argc; i++){
+  for(i = argi + 1; i < argc; i++){
     if((fd = open(argv[i], O_RDONLY)) < 0){
       printf("grep: cannot open %s\n", argv[i]);
       exit(1);
@@ -90,7 +113,7 @@ int matchhere(char *re, char *text)
     return matchstar(re[0], re+2, text);
   if(re[0] == '$' && re[1] == '\0')
     return *text == '\0';
-  if(*text!='\0' && (re[0]=='.' || re[0]==*text))
+  if(*text!='\0' && (re[0]=='.' || charmatch(re[0], *text)))
     return matchhere(re+1, text+1);
   return 0;
 }
@@ -101,7 +124,7 @@ int matchstar(int c, char *re, char *text)
   do{  // a * matches zero or more instances
     if(matchhere(re, text))
       return 1;
-  }while(*text!='\0' && (*text++==c || c=='.'));
+  }while(*text!='\0' && (c=='.' || charmatch(c, *text++)));
   return 0;
 }
 

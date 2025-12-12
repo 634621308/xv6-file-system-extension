@@ -363,6 +363,9 @@ sys_open(void)
   if((omode & O_TRUNC) && ip->type == T_FILE){
     itrunc(ip);
   }
+  if((omode & O_APPEND) && ip->type == T_FILE){
+    f->off = ip->size;
+  }
 
   iunlock(ip);
   end_op();
@@ -501,5 +504,61 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64
+sys_symlink(void)
+{
+  char target[MAXPATH], path[MAXPATH];
+  struct inode *ip;
+  int len;
+
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
+    return -1;
+
+  begin_op();
+  if((ip = create(path, T_SYMLINK, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+
+  len = strlen(target);
+  if(writei(ip, 0, (uint64)target, 0, len) != len){
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  ip->size = len;
+  iupdate(ip);
+  iunlockput(ip);
+  end_op();
+  return 0;
+}
+
+uint64
+sys_lstat(void)
+{
+  struct stat st;
+  char path[MAXPATH];
+  uint64 staddr;
+  struct inode *ip;
+
+  if(argstr(0, path, MAXPATH) < 0)
+    return -1;
+  argaddr(1, &staddr);
+
+  begin_op();
+  if((ip = namei_nofollow(path)) == 0){
+    end_op();
+    return -1;
+  }
+  ilock(ip);
+  stati(ip, &st);
+  iunlock(ip);
+  end_op();
+
+  if(copyout(myproc()->pagetable, staddr, (char *)&st, sizeof(st)) < 0)
+    return -1;
   return 0;
 }

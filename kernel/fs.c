@@ -671,10 +671,14 @@ skipelem(char *path, char *name)
 // If parent != 0, return the inode for the parent and copy the final
 // path element into name, which must have room for DIRSIZ bytes.
 // Must be called inside a transaction since it calls iput().
+#define MAXSYMLINK 10
+
 static struct inode*
-namex(char *path, int nameiparent, char *name)
+namex(char *path, int nameiparent, char *name, int follow_link)
 {
   struct inode *ip, *next;
+  int depth = 0;
+  char linkbuf[MAXPATH];
 
   if(*path == '/')
     ip = iget(ROOTDEV, ROOTINO);
@@ -696,8 +700,35 @@ namex(char *path, int nameiparent, char *name)
       iunlockput(ip);
       return 0;
     }
-    iunlockput(ip);
+    struct inode *parent = ip;
+    iunlock(parent);
+
     ip = next;
+    ilock(ip);
+    if(ip->type == T_SYMLINK && (follow_link || *path != '\0')){
+      if(depth++ >= MAXSYMLINK){
+        iunlockput(ip);
+        iput(parent);
+        return 0;
+      }
+      int len = readi(ip, 0, (uint64)linkbuf, 0, MAXPATH - 1);
+      iunlockput(ip);
+      if(len < 0){
+        iput(parent);
+        return 0;
+      }
+      linkbuf[len] = 0;
+      if(linkbuf[0] == '/'){
+        iput(parent);
+        ip = iget(ROOTDEV, ROOTINO);
+      } else {
+        ip = parent;
+      }
+      path = linkbuf;
+      continue;
+    }
+    iunlock(ip);
+    iput(parent);
   }
   if(nameiparent){
     iput(ip);
@@ -710,11 +741,18 @@ struct inode*
 namei(char *path)
 {
   char name[DIRSIZ];
-  return namex(path, 0, name);
+  return namex(path, 0, name, 1);
 }
 
 struct inode*
 nameiparent(char *path, char *name)
 {
-  return namex(path, 1, name);
+  return namex(path, 1, name, 1);
+}
+
+struct inode*
+namei_nofollow(char *path)
+{
+  char name[DIRSIZ];
+  return namex(path, 0, name, 0);
 }
